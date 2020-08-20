@@ -1,0 +1,103 @@
+---
+title: "uds_tidal"
+author: "IW"
+date: "13/05/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,warning=FALSE, message=FALSE)
+```
+
+## R Markdown
+
+```{r libraries}
+library(sf)
+library(tmap)
+library(raster)
+```
+
+```{r load layers}
+shag1_UD50.sf<-st_read("EUSH_616_UD_50%.shp")
+shag1_UD90.sf<-st_read("EUSH_616_UD_90%.shp")
+tidal_agreements<-st_read("Tidal_Infrastructure_Agreements.shp")
+scotcoast.sf<-st_read("scotcoast.shp")
+```
+
+```{r crs layers}
+st_crs(shag1_UD50.sf)
+st_crs(tidal_agreements)
+st_crs(scotcoast.sf)
+shag1_UD50.sf<-st_transform(shag1_UD50.sf,crs=32630)
+shag1_UD90.sf<-st_transform(shag1_UD90.sf,crs=32630)
+tidal_agreements<-st_transform(tidal_agreements,crs=32630)
+st_crs(shag1_UD50.sf)
+st_crs(shag1_UD90.sf)
+st_crs(tidal_agreements)
+st_crs(scotcoast.sf)
+```
+
+```{r map layers}
+tm_shape(tidalPF_viable.sf)+tm_fill(col="MEAN_SP_PC",palette="plasma")+tm_shape(shag1_UD50.sf)+tm_borders()+tm_shape(tidal_agreements)+tm_polygons(col="blue")
+
+tm_shape(tidalPF_viable.sf)+tm_fill(col="MEAN_SP_PC",palette="plasma")+tm_shape(shag1_UD90.sf)+tm_borders()+tm_shape(tidal_agreements)+tm_polygons(col="blue")
+
+tm_shape(shag1_UD90.sf)+tm_borders()+tm_shape(shag1_UD50.sf)+tm_borders()
+
+tmap_mode(mode="plot")
+```
+First we need to assign values to the vectors
+```{r assigning values to vectors}
+shag1_UD50.sf$constraint<-50
+shag1_UD90.sf$constraint<-10
+
+tm_shape(shag1_UD90.sf)+tm_fill(col="constraint")
+
+```
+
+Rasterizing
+
+```{r rasterizing uds}
+shag1_UD50prep.r<-raster(as(shag1_UD50.sf, "Spatial"),res=1)
+res(shag1_UD50prep.r)
+shag1_UD50.r<-rasterize(as(shag1_UD50.sf,"Spatial"),shag1_UD50prep.r,progress="text",field="constraint")
+res(shag1_UD50.r)
+
+shag1_UD90prep.r<-raster(as(shag1_UD90.sf, "Spatial"),res=1)
+shag1_UD90.r<-rasterize(as(shag1_UD90.sf,"Spatial"),shag1_UD90prep.r,progress="text",field="constraint")
+```
+
+combining the two rasters after alligning properties
+
+```{r visualising}
+
+ud50<-tm_shape(shag1_UD50.r)+tm_raster()
+tmap_save(tm = ud50, filename = "ud50.png")
+```
+```{r alligning properties}
+#now make sure the rasters all have the same properties
+extent(shag1_UD50.r)
+extent(shag1_UD90.r)
+#this extent should fit everything:
+newextent<-extent(493219.6,510909.6,6496386,6508635)
+
+
+shag1_UD50.r<-setExtent(shag1_UD50.r,newextent,keepres=TRUE)
+shag1_UD90.r<-setExtent(shag1_UD90.r,newextent,keepres=TRUE)
+
+#shag1_UD90.r <- resample(shag1_UD90.r, shag1_UD50.r)
+
+res(shag1_UD50.r)
+res(shag1_UD90.r)
+nrow(shag1_UD90.r)
+ncol(shag1_UD90.r)
+
+
+rasterstack_UD<-stack(shag1_UD50.r,shag1_UD90.r)
+shag1_UD.r<-sum(rasterstack_UD)
+```
+```{r combining rasters}
+tm_shape(shag1_UD.r)+tm_raster()
+tm_shape(shag1_UD50.r)+tm_raster()
+tm_shape(shag1_UD90.r)+tm_raster()
+```
