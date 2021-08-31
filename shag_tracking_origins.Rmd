@@ -27,11 +27,18 @@ library(sf) #for anything GIS, polygons
 #library(adehabitatLT) #rediscretization
 #library(adehabitatHR) #utilization distributions
 library(leaflet) #for quick viz
+library(tmap)
 ```
 
 ```{r mapping data, echo =FALSE}
-scot<-st_read("C:/Users/isaks/OneDrive - University of the Highlands and Islands/PhD stuff/maps/uk/Scotland_ERI", "Scotland boundary") #land
+#For on laptop Natalie
+scot<-st_read("C:/Users/isaks/OneDrive - University of the Highlands and Islands/PhD stuff/maps/uk/Scotland_ERI", "Scotland boundary")
 scot<-scot %>% st_set_crs(27700) #it is in bng
+
+#For on laptop Inne
+scot<-st_read("scotcoast.shp")
+
+#For both
 scot_wgs84 <- st_transform(scot, "+proj=longlat +datum=WGS84") #transform to wgs84
 ```
 
@@ -44,8 +51,8 @@ The idea is that since tracking data can be provided to marine spatial planners 
 The simplest and rawest form of tracking data are the GPS fixes themselves with biologging data, where available, attached. Details on appending TDR data to GPS data (of this bird actually) are provided in the appendix of Isaksson et al. 2021.
 
 ```{r read in raw tracking data}
-
-eush616_raw <- read.csv(file = 'C:/Users/isaks/OneDrive - University of the Highlands and Islands/PhD stuff/analysis/pfirth/eush616_raw.csv') #raw tracking dataset
+#I removed your path from it Natalie, hope that also works for you (should do if you have the folder "RLab_shags" as your working directory and the file is in there?)
+eush616_raw <- read.csv(file = 'eush616_raw.csv') #raw tracking dataset
 
 colnames(eush616_raw)
 ```
@@ -101,7 +108,7 @@ The track below has been rediscretized to the interval the GPS was set to take f
 Notice how the foraging trip dataset consists of fewer points than the raw dataset (320 vs 566) and now has an added "trip_id" column, for all the foraging trips the fixes were from (in this case just one).
 
 ```{r read in foraging trip dataset}
-eush616_trip <- read.csv(file = 'C:/Users/isaks/OneDrive - University of the Highlands and Islands/PhD stuff/analysis/pfirth/eush616_trip.csv') #raw tracking dataset
+eush616_trip <- read.csv(file = 'eush616_trip.csv') #raw tracking dataset
 
 colnames(eush616_trip)
 ```
@@ -154,7 +161,7 @@ Notice that the dataset now consists of only 236 points, differing from the fora
 
 ```{r read in foraging points only dataset}
 
-eush616_foraging <- read.csv(file = 'C:/Users/isaks/OneDrive - University of the Highlands and Islands/PhD stuff/analysis/pfirth/eush616_foraging.csv') 
+eush616_foraging <- read.csv(file = 'eush616_foraging.csv') 
 
 colnames(eush616_foraging)
 
@@ -199,3 +206,33 @@ forageplot
 ```
 
 IS LEAFLET BETTER FOR THIS KIND OF VISUALIZATION AS YOU CAN ZOOM IN???
+
+Just so we can also zoom in, here is the plot using tmap
+
+```{r tmap version of forage map}
+#first we need to convert it to a shapefile and use the same crs as we already have
+wgs84<-crs(scot_wgs84)
+
+eush616_foraging.sp <- SpatialPointsDataFrame(eush616_foraging[,c(4,3)],
+                    eush616_foraging.sf,    #the R object to convert
+                    proj4string = wgs84)   # assign a CRS 
+
+#then we need to make a bounding box, similar to ggplot's xlim and ylim
+bbox_shag<-bbox(eush616_foraging.sp)
+
+bbox_shag[1] <- -3.15
+bbox_shag[3] <- -2.82
+bbox_shag[2] <- 58.63
+bbox_shag[4] <- 58.70
+
+#plotting the map
+forageplot.tm<-tm_shape(scot_wgs84,bbox=bbox_shag)+tm_polygons()+tm_shape(eush616_foraging.sp)+tm_dots(col="activity",size=0.1,title="Location",palette="viridis")
+forageplot.tm
+#for viewing
+tmap_mode("view")
+forageplot.tm
+#back to plot mode
+tmap_mode("plot")
+forageplot.tm
+```
+
