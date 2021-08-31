@@ -28,6 +28,7 @@ library(sf) #for anything GIS, polygons
 #library(adehabitatHR) #utilization distributions
 library(leaflet) #for quick viz
 library(tmap)
+library(terra)
 ```
 
 ```{r mapping data, echo =FALSE}
@@ -211,7 +212,7 @@ Just so we can also zoom in, here is the plot using tmap
 
 ```{r tmap version of forage map}
 #first we need to convert it to a shapefile and use the same crs as we already have
-wgs84<-crs(scot_wgs84)
+wgs84<- terra::crs(scot_wgs84)
 
 eush616_foraging.sp <- SpatialPointsDataFrame(eush616_foraging[,c(4,3)],
                     eush616_foraging.sf,    #the R object to convert
