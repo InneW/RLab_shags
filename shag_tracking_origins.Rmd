@@ -27,8 +27,8 @@ library(sf) #for anything GIS, polygons
 #library(adehabitatLT) #rediscretization
 #library(adehabitatHR) #utilization distributions
 library(leaflet) #for quick viz
-library(tmap)
-library(terra)
+library(tmap) #for interactive plots
+library(terra) #crs function
 ```
 
 ```{r mapping data, echo =FALSE}
@@ -37,7 +37,7 @@ scot<-st_read("C:/Users/isaks/OneDrive - University of the Highlands and Islands
 scot<-scot %>% st_set_crs(27700) #it is in bng
 
 #For on laptop Inne
-scot<-st_read("scotcoast.shp")
+#scot<-st_read("scotcoast.shp")
 
 #For both
 scot_wgs84 <- st_transform(scot, "+proj=longlat +datum=WGS84") #transform to wgs84
@@ -215,7 +215,7 @@ Just so we can also zoom in, here is the plot using tmap
 wgs84<- terra::crs(scot_wgs84)
 
 eush616_foraging.sp <- SpatialPointsDataFrame(eush616_foraging[,c(4,3)],
-                    eush616_foraging.sf,    #the R object to convert
+                    eush616_foraging,    #the R object to convert
                     proj4string = wgs84)   # assign a CRS 
 
 #then we need to make a bounding box, similar to ggplot's xlim and ylim
