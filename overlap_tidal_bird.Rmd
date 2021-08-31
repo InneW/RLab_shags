@@ -20,26 +20,21 @@ library(raster)
 ```{r load layers}
 shag1_UD50.sf<-st_read("EUSH_616_UD_50%.shp")
 shag1_UD90.sf<-st_read("EUSH_616_UD_90%.shp")
+tidal_scot.sf<-st_read("Tidal_PF.shp")
+
 ```
 
 ```{r crs layers}
 st_crs(shag1_UD50.sf)
+st_crs(tidal_scot.sf)
 shag1_UD50.sf<-st_transform(shag1_UD50.sf,crs=32630)
 shag1_UD90.sf<-st_transform(shag1_UD90.sf,crs=32630)
 
 st_crs(shag1_UD50.sf)
 st_crs(shag1_UD90.sf)
+st_crs(tidal_scot.sf)
 ```
 
-```{r map layers}
-tm_shape(tidalPF_viable.sf)+tm_fill(col="MEAN_SP_PC",palette="plasma")+tm_shape(shag1_UD50.sf)+tm_borders()+tm_shape(tidal_agreements)+tm_polygons(col="blue")
-
-tm_shape(tidalPF_viable.sf)+tm_fill(col="MEAN_SP_PC",palette="plasma")+tm_shape(shag1_UD90.sf)+tm_borders()+tm_shape(tidal_agreements)+tm_polygons(col="blue")
-
-tm_shape(shag1_UD90.sf)+tm_borders()+tm_shape(shag1_UD50.sf)+tm_borders()
-
-tmap_mode(mode="plot")
-```
 First we need to assign values to the vectors
 ```{r assigning values to vectors}
 shag1_UD50.sf$constraint<-40
@@ -67,11 +62,34 @@ rasterstack_UD<-stack(shag1_UD50.r,shag1_UD90.r)
 
 shag1_UD.r<-sum(rasterstack_UD)
 ```
+
+
 ```{r combining rasters}
 tm_shape(shag1_UD.r)+tm_raster(showNA=TRUE,colorNA="yellow")
 ```
 ```{r write raster}
 summary(shag1_UD.r)
 shag1_UD.r[is.na(shag1_UD.r)]<-0
-writeRaster(shag1_UD.r, "UDshags.TIF")
+```
+
+```{r make tidal same size}
+tidalPF_viable.sf<-tidal_scot.sf[tidal_scot.sf$MEAN_SP_PC > 2,]
+tm_shape(tidalPF_viable.sf)+tm_fill(col="MEAN_SP_PC",palette="plasma")
+
+#crop sf to stroma
+cropper<-extent(shag1_UD.r)
+tidal_stroma_viable.sf<-st_crop(tidalPF_viable.sf,cropper)
+
+#convert to raster
+tidal_stroma.r<-rasterize(as(tidal_stroma_viable.sf,"Spatial"),shag1_UD90prep.r,progress="text",field="MEAN_SP_PC")
+
+tidal_stroma.r[is.na(tidal_stroma.r)]<-0
+
+rasterstack_MOLA<-stack(shag1_UD.r,tidal_stroma.r)
+
+dim(tidal_stroma.r)
+dim(shag1_UD.r)
+
+writeRaster(shag1_UD.r, "UDshags.TIF",overwrite=T)
+writeRaster(tidal_stroma.r, "tidal_stroma.tif",overwrite=T)
 ```
