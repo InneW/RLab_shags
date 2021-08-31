@@ -16,7 +16,7 @@ library(sf)
 library(tmap)
 library(raster)
 ```
-
+INNE WAS HERE
 ```{r load layers}
 shag1_UD50.sf<-st_read("EUSH_616_UD_50%.shp")
 shag1_UD90.sf<-st_read("EUSH_616_UD_90%.shp")
