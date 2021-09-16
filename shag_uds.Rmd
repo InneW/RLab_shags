@@ -1,0 +1,203 @@
+---
+title: "Shag utilization distributions"
+author: "Natalie Isaksson"
+date: "16/09/2021"
+output: html_document
+bibliography: tracking_MSP.bib
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(root.dir = 'C:/Users/isaks/OneDrive - University of the Highlands and Islands/PhD stuff/analysis/pfirth/RLab_shags', #set own
+                      warning = FALSE,
+                      message = FALSE,
+                      fig.align = "center",
+                      dev = "png",
+                      cache = TRUE)
+```
+
+```{r library, echo = FALSE, include = FALSE}
+#packages needed to run this script
+library(lubridate) #not sure if necesssary for this, its mainly for datetime wrangling
+#library(tidyverse) #data wrangling, dplyr, lubridate and ggplot2 are all part of it, beware masking!
+library(dplyr) #wrangling
+library(ggplot2) #plotting
+library(purrr) #for map function
+library(ggspatial) #for scalebar
+library(sf) #for anything GIS, polygons
+library(adehabitatLT) #rediscretization and interface with adehabitatHR
+library(adehabitatHR) #utilization distributions
+library(leaflet) #for quick viz
+library(raster) #for exporting as a raster
+```
+
+```{r mapping data, echo =FALSE}
+scot<-st_read("C:/Users/isaks/OneDrive - University of the Highlands and Islands/PhD stuff/maps/uk/Scotland_ERI", "Scotland boundary") #land
+scot<-scot %>% st_set_crs(27700) #it is in bng
+scot_wgs84 <- st_transform(scot, "+proj=longlat +datum=WGS84") #transform to wgs84
+```
+
+Now the track has been prepared and processed to only include foraging locations (positions at which the shag is either on the sea surface or below). This is where spatial overlap with either floating mooring or rotating blades of tidal-stream turbines is possible. The next step is extract the utilization distribution (UD) from this track, effectively transforming the point data into a volume. As the length of the track is short (<48 hrs), the UD will be one of occurrence as opposed to a home range [@Worton1989; @Ford1979]. As the track is autocorrelated in time and space [@Fleming2015; @Noonan2019], the biased random bridge method implemented in the adehabitatHR package was applied [@Calenge2006]. Where data are taken to be representative of the individual’s use of the space over a longer timespan (e.g. an entire breeding season), a home range estimator such as auto-correlated kernel density estimation may be applied instead, implemented in the 'ctmm' package [@Fleming2017; @Calabrese2016]. 
+
+The BRB() function in adehabitatHR accounts for autocorrelation by including a non-random “drift” component to the estimation of the probability density function [@Benhamou2011]. The diffusion coefficient D (in units of the coordinates, in this case m2/s, the aggregate of distributions that specify the random-walk model predicting the path of an individual, [@Ovaskainen2004]) was determined using the maximum likelihood function BRB.likD(), described in more detail in [@Horne2007]. The minimum smoothing parameter hmin (m, the minimum uncertainty surrounding an animal’s position) was set to 200 m following the distribution of distances between consecutive fixes [@Benhamou2010]. Grid size will depend on study species' movement ecology (range of distances between fixes as well as maximum range), GPS interval and error, scale of environmental variables being compared with, and computing power. The smaller the grid size the higher the resolution, the larger the file. In this case grid size (100 m) was selected based on range of distances between fixes, scale of tidal lease site (< 5 km), and reasonable file size.
+
+
+```{r load data}
+
+eush616_foraging <- read.csv(file = 'eush616_foraging.csv') 
+
+```
+
+
+Because of how adehabitatHR and its sibling package adehabitatLT works, there needs to be postitions in a CRS that uses metres. So first convert lat/lon to x and y in British National Grid.
+
+```{r make x & y variables}
+
+#convert to simple feature and re-project coordinates
+as_sf<-eush616_foraging%>%
+  mutate(lon = Longitude, lat = Latitude) %>% #create duplicate of coordinates as these disappear in next step
+  st_as_sf(coords = c("lon", "lat"), crs = 4326) %>%
+  st_transform(27700) #epsg code for BNG
+
+#extract converted coordinates and convert back to df
+eush616_foraging <- as_sf %>%
+  mutate(x = unlist(map(as_sf$geometry,1)), #map is in purrr
+         y = unlist(map(as_sf$geometry,2))) %>% 
+  st_drop_geometry()
+
+```
+
+Next, make a grid for the UD to be "projected" onto. Grid size choice will depend on a couple things, such as movement of the birds, resolutions of environmental variables or development sites, and desired file size. 
+
+```{r make grid}
+xmin<-min(eush616_foraging$x)
+xmax<-max(eush616_foraging$x)
+ymin<-min(eush616_foraging$y)
+ymax<-max(eush616_foraging$y)
+
+#make the grid larger than dataframe values to allow space for the UD
+x_res<-seq(xmin-10000, xmax+10000, by =100) #if grid desired is 100 x 100m
+y_res<-seq(ymin-10000, ymax+10000, by =100)
+xy <- expand.grid(x=x_res,y=y_res)
+
+coordinates(xy) <- ~x+y
+gridded(xy) <- TRUE
+```
+
+Extract occurrence distribution using BRB method.
+
+```{r extract UD}
+
+#change name of datetime to fit with ltraj
+eush616_foraging<-eush616_foraging %>% rename(date=Datetime)
+
+traj_ud<-dl(eush616_foraging) #convert to ltraj object as this is what adehabitatHR wants
+
+#get D using maximum likelihood
+vv<-BRB.likD(traj_ud[1], Tmax = 120*2, Lmin = 0) #Tmax is the max duration (in seconds) allowed for a step built by successive relocations (can be checked using 'dt' variable). Lmin is the minimum distance (in m) bw successive relocations defining intensive use or resting.
+
+#extract ud
+#checking the distribution of distances between consecutive fixes will help in setting hmin, as will knowledge of GPS error (typically <10m).
+#summary(traj_ud[[1]]$dist)
+ud<-BRB(traj_ud[1], D = vv, Tmax = 120*2, Lmin = 0, hmin=200, grid = xy)
+
+```
+
+Once the utilizatin distribution is extracted, can get relevant isopleths. From [@Isaksson2021], its clear that only the 95% contour or isopleth is relevant here because it includes the most dive locations, which is where risk is greatest. The 50% is usually given as the "hotspot" of bird locations (where birds spend most time), but this makes more sense when all points are retained (not, as done here, filtered to only be the foraging locations) and a "home range" is computed.
+
+We can explore this more in depth if we choose to extract a home range utilizaton distribution of the raw point locations for comparison.
+
+```{r plot full ud}
+#just to quick viz the full ud
+eush616_ud_raster <- raster(as(ud, "SpatialPixelsDataFrame"))
+class(eush616_ud_raster) 
+plot(eush616_ud_raster) 
+
+```
+
+Extract isopleths.
+
+```{r extract isopleths}
+
+#NOTE THIS IS NOT A PRETTY WAY OF DOING IT, COULD BE IMPROVED
+vertex_50<- getverticeshr(ud, 50, unin =c("m"), unout=c("m2"))
+vertex_75<- getverticeshr(ud, 75, unin =c("m"), unout=c("m2"))
+vertex_90<- getverticeshr(ud, 90, unin =c("m"), unout=c("m2"))
+vertex_95<- getverticeshr(ud, 95, unin =c("m"), unout=c("m2"))
+
+#add info on isopleth level, as a factor!
+vertex_50@data$id <- "50"
+vertex_75@data$id <- "75"
+vertex_90@data$id <- "90"
+vertex_95@data$id <- "95"
+
+#combine using rbind
+vertices_bound <- rbind(vertex_50, vertex_75, vertex_90, vertex_95)
+
+#add trip id
+vertices_bound@data$trip_id <- 1
+
+ud_list <- list() #put the uds somewhere
+
+ud_list[[1]] <- vertices_bound #put it in the list
+
+#convert to an sf object
+list_sf<-lapply(ud_list, st_as_sf)
+
+#combine rows into a df
+extraction<-dplyr::bind_rows(list_sf)
+
+#clean up
+eush616_ud2<-extraction%>% 
+  mutate(ID = "EUSH_616") %>% 
+  rename(UD_level = id,
+         area_m2=area)
+
+eush616_ud2<-st_set_crs(eush616_ud2, 27700)
+
+#st_write(eush616_ud2, "eush616_tdr_BRB.shp")
+
+```
+
+The full utilization distribution and the extracted isopleths can then be exported for further analysis.
+
+```{r output ud & isopleths}
+
+saveRDS(eush616_ud_raster, file="eush616_ud_raster.rds")
+st_write(eush616_ud2, "eush616_ud_MSP.shp")
+
+```
+
+Obligatory plot, in this case of the relevant 95% occurrence distribution of foraging over the foraging locations.
+
+```{r plot ud over foraging locations, echo = FALSE}
+
+ud_fixes<-ggplot()+
+  geom_point(data = eush616_foraging, aes(x=x, y=y), shape = 21, size = 2, color = "blue", fill = NA, stroke = 1, alpha = 0.6)+
+  geom_sf(data=eush616_ud2 %>% filter(UD_level==95), 
+          fill = NA,
+          color="black",
+          size= 1)+
+  geom_sf(data=scot,
+          fill="grey80", color="white")+
+  annotation_scale(location="bl", width_hint=0.2, style="ticks")+ #scale bar at bottom right, size, and style of bar
+ # coord_sf(xlim = c(314088, 355040), ylim = c(968952, 991649), expand = FALSE)+ #in bng
+  coord_sf(xlim = c(336207, 352579), ylim = c(970754, 979429), expand = FALSE)+ #zoom in bng
+  #coord_sf(xlim=c(-3.1, -2.82), ylim=c(58.62, 58.7), expand=FALSE)+ #extreme zoom in, otherwise extent of Pentland Firth: xlim=c(-3.48, -2.78), ylim=c(58.6, 58.81)
+  scale_y_continuous(breaks = c(58.63, 58.65, 58.67, 58.69))+ #set tick marks manually
+  scale_x_continuous(breaks = c(-3.1, -3, -2.9))+
+  theme(panel.background = element_rect(fill = "transparent"), # bg of the panel
+        plot.background = element_rect(fill = "transparent", color = NA), # bg of the plot
+        # axis.line = element_line(colour = "black", 
+        #                         size = 1, linetype = "solid"), #put in an exis line!
+        axis.text=element_text(size = 12), #change size of axis text & title
+        axis.title =element_text(size= 14),
+        panel.grid.major=element_blank(), 
+        panel.grid.minor=element_blank())+
+  labs(x="Longitude", y="Latitude")
+ud_fixes
+
+```
+
+Could plot the raster as well, just not good at plotting raster stuff!!!
+
+
