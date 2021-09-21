@@ -13,6 +13,8 @@ knitr::opts_chunk$set(root.dir = 'C:/Users/isaks/OneDrive - University of the Hi
                       fig.align = "center",
                       dev = "png",
                       cache = TRUE)
+
+# knitr::opts_chunk$set(warning = FALSE,message = FALSE,fig.align = "center",dev = "png",cache = TRUE)
 ```
 
 ```{r library, echo = FALSE, include = FALSE}
@@ -23,6 +25,7 @@ library(ggplot2)
 #library(tidyverse) #data wrangling, dplyr, lubridate and ggplot2 are all part of it, beware masking!
 #library(diveMove) #tdr specific stuff
 library(ggspatial) #for scalebar
+library(sp) #for SpatialPointsDataFrame function
 library(sf) #for anything GIS, polygons
 #library(adehabitatLT) #rediscretization
 #library(adehabitatHR) #utilization distributions
@@ -205,6 +208,11 @@ forageplot<-ggplot()+
 labs(x="Longitude", y="Latitude")
 forageplot
 ```
+# How many dives?
+```{r how many dives}
+eush616_dives<-eush616_foraging
+eush616_dives<-eush616_dives[eush616_dives$activity=="D",]
+``` 
 
 IS LEAFLET BETTER FOR THIS KIND OF VISUALIZATION AS YOU CAN ZOOM IN???
 
@@ -214,6 +222,7 @@ Just so we can also zoom in, here is the plot using tmap
 #first we need to convert it to a shapefile and use the same crs as we already have
 wgs84<- terra::crs(scot_wgs84)
 
+#c(4,3) are the coordinates
 eush616_foraging.sp <- SpatialPointsDataFrame(eush616_foraging[,c(4,3)],
                     eush616_foraging,    #the R object to convert
                     proj4string = wgs84)   # assign a CRS 

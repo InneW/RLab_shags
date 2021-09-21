@@ -13,6 +13,8 @@ knitr::opts_chunk$set(root.dir = 'C:/Users/isaks/OneDrive - University of the Hi
                       fig.align = "center",
                       dev = "png",
                       cache = TRUE)
+
+# knitr::opts_chunk$set(warning = FALSE,message = FALSE,fig.align = "center",dev = "png",cache = TRUE)
 ```
 
 ```{r library, echo = FALSE, include = FALSE}
@@ -28,11 +30,17 @@ library(adehabitatLT) #rediscretization and interface with adehabitatHR
 library(adehabitatHR) #utilization distributions
 library(leaflet) #for quick viz
 library(raster) #for exporting as a raster
+library(tmap) #for mapping with tmap
 ```
 
 ```{r mapping data, echo =FALSE}
 scot<-st_read("C:/Users/isaks/OneDrive - University of the Highlands and Islands/PhD stuff/maps/uk/Scotland_ERI", "Scotland boundary") #land
 scot<-scot %>% st_set_crs(27700) #it is in bng
+
+#For on laptop Inne
+#scot<-st_read("scotcoast.shp")
+
+#For both
 scot_wgs84 <- st_transform(scot, "+proj=longlat +datum=WGS84") #transform to wgs84
 ```
 
@@ -102,7 +110,7 @@ ud<-BRB(traj_ud[1], D = vv, Tmax = 120*2, Lmin = 0, hmin=200, grid = xy)
 
 ```
 
-Once the utilizatin distribution is extracted, can get relevant isopleths. From [@Isaksson2021], its clear that only the 95% contour or isopleth is relevant here because it includes the most dive locations, which is where risk is greatest. The 50% is usually given as the "hotspot" of bird locations (where birds spend most time), but this makes more sense when all points are retained (not, as done here, filtered to only be the foraging locations) and a "home range" is computed.
+Once the utilization distribution is extracted, can get relevant isopleths. From [@Isaksson2021], its clear that only the 95% contour or isopleth is relevant here because it includes the most dive locations, which is where risk is greatest. The 50% is usually given as the "hotspot" of bird locations (where birds spend most time), but this makes more sense when all points are retained (not, as done here, filtered to only be the foraging locations) and a "home range" is computed.
 
 We can explore this more in depth if we choose to extract a home range utilizaton distribution of the raw point locations for comparison.
 
@@ -163,7 +171,7 @@ The full utilization distribution and the extracted isopleths can then be export
 ```{r output ud & isopleths}
 
 saveRDS(eush616_ud_raster, file="eush616_ud_raster.rds")
-st_write(eush616_ud2, "eush616_ud_MSP.shp")
+#st_write(eush616_ud2, "eush616_ud_MSP.shp")
 
 ```
 
@@ -200,4 +208,37 @@ ud_fixes
 
 Could plot the raster as well, just not good at plotting raster stuff!!!
 
+```{r tmap version of UDs}
+tm_shape(eush616_ud95)+tm_polygons()
+
+#get the sp file for the bounding box
+#first we need to convert it to a shapefile and use the same crs as we already have
+wgs84<- terra::crs(scot_wgs84)
+
+#c(4,3) are the coordinates
+eush616_foraging.sp <- SpatialPointsDataFrame(eush616_foraging[,c(4,3)],
+                    eush616_foraging,    #the R object to convert
+                    proj4string = wgs84)   # assign a CRS 
+#then we need to make a bounding box, similar to ggplot's xlim and ylim
+bbox_shag<-bbox(eush616_foraging.sp)
+
+bbox_shag[1] <- -3.15
+bbox_shag[3] <- -2.82
+bbox_shag[2] <- 58.63
+bbox_shag[4] <- 58.70
+
+#plotting the map
+UDplot.tm<-tm_shape(scot_wgs84,bbox=bbox_shag)+tm_polygons()+tm_shape(eush616_ud95)+tm_fill(col="orange")+tm_scale_bar(position=c("left","bottom"))+tm_grid(n.x=3,n.y=4,lines=F,labels.cardinal=T)+tm_add_legend(type="fill",col="orange",labels="Unsuitable",border.col=NA)
+UDplot.tm
+tmap_save(UDplot.tm,"UDplot.png")
+```
+
+```{r map viewing}
+#for viewing
+tmap_mode("view")
+forageplot.tm
+#back to plot mode
+tmap_mode("plot")
+forageplot.tm
+```  
 
