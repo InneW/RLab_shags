@@ -210,8 +210,8 @@ forageplot
 ```
 # How many dives?
 ```{r how many dives}
-eush616_dives<-eush616_foraging
-eush616_dives<-eush616_dives[eush616_dives$activity=="D",]
+eush616_dives<-eush616_raw
+eush616_dives<-eush616_dives[eush616_dives$activity=="W",]
 ``` 
 
 IS LEAFLET BETTER FOR THIS KIND OF VISUALIZATION AS YOU CAN ZOOM IN???
