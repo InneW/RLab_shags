@@ -39,15 +39,25 @@ scot<-scot %>% st_set_crs(27700) #it is in bng
 
 #For on laptop Inne
 #scot<-st_read("scotcoast.shp")
+shagnest<-st_point(c(336215, 977686))
+shagnest.sf<-st_sfc(x=shagnest)
 
+shagnest.sf<-shagnest.sf %>% st_set_crs(27700)
+st_crs(shagnest.sf)
 #For both
 scot_wgs84 <- st_transform(scot, "+proj=longlat +datum=WGS84") #transform to wgs84
+shagnest_wgs84.sf<- st_transform(shagnest.sf,"+proj=longlat +datum=WGS84")
 ```
 
 Now the track has been prepared and processed to only include foraging locations (positions at which the shag is either on the sea surface or below). This is where spatial overlap with either floating mooring or rotating blades of tidal-stream turbines is possible. The next step is extract the utilization distribution (UD) from this track, effectively transforming the point data into a volume. As the length of the track is short (<48 hrs), the UD will be one of occurrence as opposed to a home range [@Worton1989; @Ford1979]. As the track is autocorrelated in time and space [@Fleming2015; @Noonan2019], the biased random bridge method implemented in the adehabitatHR package was applied [@Calenge2006]. Where data are taken to be representative of the individual’s use of the space over a longer timespan (e.g. an entire breeding season), a home range estimator such as auto-correlated kernel density estimation may be applied instead, implemented in the 'ctmm' package [@Fleming2017; @Calabrese2016]. 
 
 The BRB() function in adehabitatHR accounts for autocorrelation by including a non-random “drift” component to the estimation of the probability density function [@Benhamou2011]. The diffusion coefficient D (in units of the coordinates, in this case m2/s, the aggregate of distributions that specify the random-walk model predicting the path of an individual, [@Ovaskainen2004]) was determined using the maximum likelihood function BRB.likD(), described in more detail in [@Horne2007]. The minimum smoothing parameter hmin (m, the minimum uncertainty surrounding an animal’s position) was set to 200 m following the distribution of distances between consecutive fixes [@Benhamou2010]. Grid size will depend on study species' movement ecology (range of distances between fixes as well as maximum range), GPS interval and error, scale of environmental variables being compared with, and computing power. The smaller the grid size the higher the resolution, the larger the file. In this case grid size (100 m) was selected based on range of distances between fixes, scale of tidal lease site (< 5 km), and reasonable file size.
 
+```{r foraging radius}
+shagnest_buffer <- st_buffer(shagnest.sf, dist = 17000)
+``` 
+
+Now the tracking data
 
 ```{r load data}
 
@@ -228,7 +238,7 @@ bbox_shag[2] <- 58.63
 bbox_shag[4] <- 58.70
 
 #plotting the map
-UDplot.tm<-tm_shape(scot_wgs84,bbox=bbox_shag)+tm_polygons()+tm_shape(eush616_ud95)+tm_fill(col="orange")+tm_scale_bar(position=c("left","bottom"))+tm_grid(n.x=3,n.y=4,lines=F,labels.cardinal=T)+tm_add_legend(type="fill",col="orange",labels="Unsuitable",border.col=NA)
+UDplot.tm<-tm_shape(shagnest_buffer)+tm_borders(lty=2,col="blue")+tm_shape(scot_wgs84,bbox=bbox_shag)+tm_polygons()+tm_shape(eush616_ud95)+tm_fill(col="orange")+tm_scale_bar(position=c("LEFT","BOTTOM"))+tm_grid(n.x=3,n.y=4,lines=F,labels.cardinal=T)+tm_add_legend(type="symbol",col="#006428",labels="Nest site")+tm_shape(shagnest_wgs84.sf)+tm_dots(size=0.5,col="#006428")+tm_credits("Contains data from https://www.mdpi.com/2077-1312/9/3/263#supplementary\nContains Ordnance Survey data © Crown copyright and database right",position=c("LEFT","BOTTOM"),size=0.4)+tm_add_legend(type="line",col="blue",labels="Foraging radius")+tm_add_legend(type="fill",col="orange",labels="Unsuitable for \ntidal development",border.col=NA)+tm_layout(legend.position=c("right","bottom"),legend.text.size=0.6,legend.height = -0.15,legend.bg.color="white",legend.frame="black")
 UDplot.tm
 tmap_save(UDplot.tm,"UDplot.png")
 ```
